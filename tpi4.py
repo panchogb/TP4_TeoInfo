@@ -6,7 +6,7 @@ import random
 
 def LeerArgumentos():
     #args = sys.argv
-    args = ['tpi4.py', 'tp4_sample7.txt', '10', '12', '-p']
+    args = ['tpi4.py', 'tp4_sample7.txt', '3', '7', '-p']
     #
     cant_arg = len(args)
     if (cant_arg == 4 or cant_arg == 5):
@@ -17,8 +17,9 @@ def LeerArgumentos():
         if (cant_arg == 5):
             flag = args[4]
         if (os.path.exists(args[1]) and N >= 0 and M >= 0 and (flag == None or flag == '-p')):
-            return True, args[1], N, M, flag
+            return True, args[1], N, M, (flag != None)
     return False, None, None, None, None
+
 def Leer_Archivo(dir_archivo):
     prob_fuente = np.zeros(2)
     matriz_canal = np.zeros((2,2))
@@ -94,23 +95,58 @@ def CalcularValores(prob_fuente, matriz_canal):
 ###################################################################################
 ###################################################################################
 ###################################################################################
-def SimularEnvioMensaje(prob_fuente, N, M):
+def CrearMensaje(prob_fuente, N, M, pc):
     # M: Longitud del mensaje
     # N: Número de mensajes
-    # GenerarMensajeAleatorio    
-    matriz_mensajes = np.random.choice(len(prob_fuente), size=(N, M), p=prob_fuente)
-    matriz_enviado = np.zeros((N, M))
-    for i in range(matriz_mensajes.shape[0]):
-        for j in range(matriz_mensajes.shape[1]):
-            matriz_enviado[i, j] = 0 if random.uniform(0, 1) < prob_fuente[0] else 1
-    print(matriz_mensajes)
-    print(matriz_enviado)
+    matriz = np.random.choice(len(prob_fuente), size=(N, M), p=prob_fuente)
+    if (pc):
+        matriz = np.pad(matriz, ((0, 1), (0, 1)), mode='constant', constant_values=0)
+        VRC = np.sum(matriz, axis=0) % 2
+        LRC = np.sum(matriz, axis=1) % 2
+        matriz[-1,:] = VRC
+        matriz[:,-1] = LRC
+        matriz[-1,-1] = (np.sum(VRC, axis=0) + np.sum(LRC, axis=0)) % 2
+    return matriz
 
-condicion, dir_archivo, N, M, flag = LeerArgumentos()
+def SimularEnvioMensaje(mensaje, matriz_canal, N, M, pc):
+    mensaje_enviado = np.copy(mensaje)
+    for i in range(N):
+        for j in range(M):
+            mensaje_enviado[i, j] = 0 if random.uniform(0, 1) < matriz_canal[mensaje[i,j], 0] else 1
+    return mensaje_enviado
+
+
+def DetectarErrores(mensaje_recibido, N, M):    
+    sumV = np.sum(mensaje_recibido[:-1,:-1], axis=0) % 2
+    sumL = np.sum(mensaje_recibido[:-1,:-1], axis=1) % 2
+
+    VRC = mensaje_recibido[-1,0:-1]
+    LRC = mensaje_recibido[0:-1,-1]
+
+    VRC_indices = np.nonzero(sumV != VRC)[0]
+    LRC_indices = np.nonzero(sumL != LRC)[0]
+
+    if (VRC_indices.shape[0] == 1 and LRC_indices.shape[0] == 1):
+        c = VRC_indices[0]
+        f = LRC_indices[0]
+        print(f'Se puede corregir, error en columna: {c} y fila: {f}')
+        mensaje_recibido[f,c] = np.abs(mensaje_recibido[f,c]-1)
+        print(f'Mensaje corregido:\n{mensaje_recibido}')
+    else:
+        print(f'No se puede corregir')
+
+condicion, dir_archivo, N, M, pc = LeerArgumentos() #pc = paridad_cruzada
 
 if (condicion):
     prob_fuente, matriz_canal = Leer_Archivo(dir_archivo)
     CalcularValores(prob_fuente, matriz_canal)
-    SimularEnvioMensaje(prob_fuente, N, M)
+    mensaje = CrearMensaje(prob_fuente, N, M, pc)
+    mensaje_enviado = SimularEnvioMensaje(mensaje, matriz_canal, N, M, pc)
+
+    print(f'Mensaje:\n{mensaje}')
+    print(f'Mensaje Enviado:\n{mensaje_enviado}')
+
+    if (pc):
+        DetectarErrores(mensaje_enviado, N, M)
 else:
     print('Error de argumentos')
