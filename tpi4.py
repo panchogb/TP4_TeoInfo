@@ -5,9 +5,7 @@ import numpy as np
 import random
 
 def LeerArgumentos():
-    #args = sys.argv
-    args = ['tpi4.py', 'tp4_sample7.txt', '3', '7', '-p']
-    #
+    args = sys.argv
     cant_arg = len(args)
     if (cant_arg == 4 or cant_arg == 5):
         N = int(args[2])
@@ -84,7 +82,7 @@ def CalcularInformacionMutuaPriori(prob_fuente, matriz_canal):
         HB += Pbi * np.log2(1.0/Pbi)
     return HB - CalcularEntropiaMediaPriori(prob_fuente, matriz_canal)
 def CalcularValores(prob_fuente, matriz_canal):
-
+    print('Datos:')
     print(f'H(A) (Entropia "a-priori" de A): {CalcularEntropiaPriori(prob_fuente):.4f}')
     for j in range(matriz_canal.shape[0]):
         print(f'H(A/b{j}) (Entropia "a-posteriori" de A, recibido b{j}): {CalcularEntropiaPosteriori(prob_fuente, matriz_canal, j):.4f}')
@@ -108,43 +106,89 @@ def CrearMensaje(prob_fuente, N, M, pc):
         matriz[-1,-1] = (np.sum(VRC, axis=0) + np.sum(LRC, axis=0)) % 2
     return matriz
 
-def SimularEnvioMensaje(mensaje, matriz_canal, N, M, pc):
-    mensaje_enviado = np.copy(mensaje)
+def SimularEnvioMensaje(mensaje, matriz_canal):
+    N, M = mensaje.shape
+    mensaje_enviado = np.zeros((N,M), dtype=int)
     for i in range(N):
         for j in range(M):
             mensaje_enviado[i, j] = 0 if random.uniform(0, 1) < matriz_canal[mensaje[i,j], 0] else 1
     return mensaje_enviado
 
 
-def DetectarErrores(mensaje_recibido, N, M):    
-    sumV = np.sum(mensaje_recibido[:-1,:-1], axis=0) % 2
-    sumL = np.sum(mensaje_recibido[:-1,:-1], axis=1) % 2
+def DetectarErrores(mensaje_recibido, N, M):
+    cant_corregidos = 0
+    if (mensaje_recibido[-1,-1] == 0):  
+        LRC = mensaje_recibido[-1,0:-1]
+        VRC = mensaje_recibido[0:-1,-1]
 
-    VRC = mensaje_recibido[-1,0:-1]
-    LRC = mensaje_recibido[0:-1,-1]
+        lrc = np.sum(LRC) % 2
+        vrc = np.sum(VRC) % 2
+        if (vrc == 0 and lrc == 0):
+            sumL = np.sum(mensaje_recibido[:-1,:-1], axis=0) % 2
+            sumV = np.sum(mensaje_recibido[:-1,:-1], axis=1) % 2
 
-    VRC_indices = np.nonzero(sumV != VRC)[0]
-    LRC_indices = np.nonzero(sumL != LRC)[0]
+            LRC_indices = np.nonzero(sumL != LRC)[0]
+            VRC_indices = np.nonzero(sumV != VRC)[0]
 
-    if (VRC_indices.shape[0] == 1 and LRC_indices.shape[0] == 1):
-        c = VRC_indices[0]
-        f = LRC_indices[0]
-        print(f'Se puede corregir, error en columna: {c} y fila: {f}')
-        mensaje_recibido[f,c] = np.abs(mensaje_recibido[f,c]-1)
-        print(f'Mensaje corregido:\n{mensaje_recibido}')
+            if (VRC_indices.shape[0] == 1 and LRC_indices.shape[0] == 1):
+                c = LRC_indices[0]
+                f = VRC_indices[0]
+                cant_corregidos = 1
+                mensaje_recibido[f,c] = np.abs(mensaje_recibido[f,c]-1)
+                print(f'\nSe puede corregir, error en columna: {c+1} y fila: {f+1}')
+                print(f'Mensaje corregido:\n{mensaje_recibido}')
+            else:
+                print(f'\nNo se puede corregir')
+        else:
+            if (vrc == 0 and lrc == 0):
+                print('\nError en Bits de LRC y VRC')
+            else:
+                if (vrc == 0):
+                    print('\nError en Bits de LRC')
+                else:
+                    print('\nError en Bits de VRC')
     else:
-        print(f'No se puede corregir')
+        print(f'\nError en bit de paridad curzada')
+    print(f'\nCantidad de mensajes corregidos: {cant_corregidos}')
+
+def CompararMensajes(mensaje, mensaje_enviado, N, M): 
+    mensajes_correctos = 0
+    print('\nComparacion mensajes:')
+    for i in range(N):
+        j = 0
+        while (j <= M and mensaje[i, j] == mensaje_enviado[i, j]):
+            j += 1
+            
+        print(f'\n{mensaje_enviado[i, :]}')
+        print(mensaje[i, :], end='')
+        if (j > M):
+            mensajes_correctos += 1
+            print(' Correcto')
+        else:            
+            print(' Incorrecto')
+
+    print(f'\nCantidad de mensajes correctos: {mensajes_correctos}')
+    print(f'Cantidad de mensajes incorrectos: {N - mensajes_correctos}')
+
 
 condicion, dir_archivo, N, M, pc = LeerArgumentos() #pc = paridad_cruzada
+
+condicion = True
+dir_archivo = 'tp4_sample7.txt'
+N = 3
+M = 7
+pc ='-p'
 
 if (condicion):
     prob_fuente, matriz_canal = Leer_Archivo(dir_archivo)
     CalcularValores(prob_fuente, matriz_canal)
     mensaje = CrearMensaje(prob_fuente, N, M, pc)
-    mensaje_enviado = SimularEnvioMensaje(mensaje, matriz_canal, N, M, pc)
+    mensaje_enviado = SimularEnvioMensaje(mensaje, matriz_canal)
 
-    print(f'Mensaje:\n{mensaje}')
-    print(f'Mensaje Enviado:\n{mensaje_enviado}')
+    print(f'\nMensaje:\n{mensaje}')
+    print(f'\nMensaje Enviado:\n{mensaje_enviado}')
+
+    CompararMensajes(mensaje_enviado, mensaje, N, M)
 
     if (pc):
         DetectarErrores(mensaje_enviado, N, M)
