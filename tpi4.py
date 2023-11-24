@@ -156,12 +156,12 @@ def CompararMensajes(mensaje, mensaje_enviado, N, M):
     print('\nComparacion mensajes:')
     for i in range(N):
         j = 0
-        while (j <= M and mensaje[i, j] == mensaje_enviado[i, j]):
+        while (j < M and mensaje[i, j] == mensaje_enviado[i, j]):
             j += 1
             
-        print(f'\n{mensaje_enviado[i, :]}')
-        print(mensaje[i, :], end='')
-        if (j > M):
+        print(f'\n{mensaje_enviado[i, :-1]}')
+        print(mensaje[i, :-1], end='')
+        if (j >= M):
             mensajes_correctos += 1
             print(' Correcto')
         else:            
