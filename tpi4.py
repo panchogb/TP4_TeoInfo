@@ -41,7 +41,7 @@ def Leer_Archivo(dir_archivo):
 def CalcularEntropiaPriori(prob_fuente):
     Entropia_a_priori = 0.0
     for i in range(prob_fuente.shape[0]):
-        Entropia_a_priori += prob_fuente[i] * np.log2(1.0/prob_fuente[i])
+        Entropia_a_priori += prob_fuente[i] * np.log2(1.0/(prob_fuente[i] if (prob_fuente[i] != 0) else 1.0))
     return Entropia_a_priori
 def CalcularEntropiaPosteriori(prob_fuente, matriz_canal, j):
     entropia = 0    
@@ -49,7 +49,7 @@ def CalcularEntropiaPosteriori(prob_fuente, matriz_canal, j):
         bj = 0
         for k in range(prob_fuente.shape[0]):
             bj += prob_fuente[k] * matriz_canal[k, j]
-        p_ai_bj = matriz_canal[i, j] * prob_fuente[i] / bj
+        p_ai_bj = matriz_canal[i, j] * prob_fuente[i] / (bj if (bj != 0) else 1.0)
         entropia += (p_ai_bj * np.log2(1.0/p_ai_bj)) if p_ai_bj != 0 else 0
     return entropia
 def CalcularEntropiaMediaPriori(prob_fuente, matriz_canal):
@@ -71,7 +71,7 @@ def CalcularEntropiaMediaPosteriori(prob_fuente, matriz_canal):
 def CalcularInformacionMutua(prob_fuente, matriz_canal):
     infoMutua = 0    
     for i in range(prob_fuente.shape[0]):
-        infoMutua += prob_fuente[i] * np.log2(1.0/prob_fuente[i])
+        infoMutua += prob_fuente[i] * np.log2(1.0/(prob_fuente[i] if (prob_fuente[i] != 0) else 1.0))
     return infoMutua - CalcularEntropiaMediaPosteriori(prob_fuente, matriz_canal)
 def CalcularInformacionMutuaPriori(prob_fuente, matriz_canal):
     HB = 0
@@ -79,16 +79,16 @@ def CalcularInformacionMutuaPriori(prob_fuente, matriz_canal):
         Pbi = 0
         for i in range(matriz_canal.shape[0]):
             Pbi += matriz_canal[i, j] * prob_fuente[i]
-        HB += Pbi * np.log2(1.0/Pbi)
+        HB += Pbi * np.log2(1.0/(Pbi if (Pbi != 0) else 1.0))
     return HB - CalcularEntropiaMediaPriori(prob_fuente, matriz_canal)
 def CalcularValores(prob_fuente, matriz_canal):
     print('Datos:')
-    print(f'H(A) (Entropia "a-priori" de A): {CalcularEntropiaPriori(prob_fuente):.4f}')
+    print(f'H(A): {CalcularEntropiaPriori(prob_fuente):.4f}')
     for j in range(matriz_canal.shape[0]):
-        print(f'H(A/b{j}) (Entropia "a-posteriori" de A, recibido b{j}): {CalcularEntropiaPosteriori(prob_fuente, matriz_canal, j):.4f}')
-    print(f'H(A/B) (Equivocacion): {CalcularEntropiaMediaPosteriori(prob_fuente, matriz_canal):.4f}')
+        print(f'H(A/b{j}): {CalcularEntropiaPosteriori(prob_fuente, matriz_canal, j):.4f}')
+    print(f'H(A/B): {CalcularEntropiaMediaPosteriori(prob_fuente, matriz_canal):.4f}')
     print(f'H(B/A): {CalcularEntropiaMediaPriori(prob_fuente, matriz_canal):.4f}')
-    print(f'I(A/B) (Informacion mutua): {CalcularInformacionMutua(prob_fuente, matriz_canal):.4f}')
+    print(f'I(A/B): {CalcularInformacionMutua(prob_fuente, matriz_canal):.4f}')
     print(f'I(B/A): {CalcularInformacionMutuaPriori(prob_fuente, matriz_canal):.4f}')
 ###################################################################################
 ###################################################################################
@@ -99,10 +99,10 @@ def CrearMensaje(prob_fuente, N, M, pc):
     matriz = np.random.choice(len(prob_fuente), size=(N, M), p=prob_fuente)
     if (pc):
         matriz = np.pad(matriz, ((0, 1), (0, 1)), mode='constant', constant_values=0)
-        VRC = np.sum(matriz, axis=0) % 2
-        LRC = np.sum(matriz, axis=1) % 2
-        matriz[-1,:] = VRC
-        matriz[:,-1] = LRC
+        VRC = np.sum(matriz, axis=1) % 2
+        LRC = np.sum(matriz, axis=0) % 2
+        matriz[:,-1] = VRC
+        matriz[-1,:] = LRC
         matriz[-1,-1] = (np.sum(VRC, axis=0) + np.sum(LRC, axis=0)) % 2
     return matriz
 
@@ -121,9 +121,8 @@ def DetectarErrores(mensaje_recibido, N, M):
         LRC = mensaje_recibido[-1,0:-1]
         VRC = mensaje_recibido[0:-1,-1]
 
-        lrc = np.sum(LRC) % 2
-        vrc = np.sum(VRC) % 2
-        if (vrc == 0 and lrc == 0):
+        paridad = (np.sum(LRC) + np.sum(VRC)) % 2
+        if (paridad == 0):
             sumL = np.sum(mensaje_recibido[:-1,:-1], axis=0) % 2
             sumV = np.sum(mensaje_recibido[:-1,:-1], axis=1) % 2
 
@@ -135,18 +134,15 @@ def DetectarErrores(mensaje_recibido, N, M):
                 f = VRC_indices[0]
                 cant_corregidos = 1
                 mensaje_recibido[f,c] = np.abs(mensaje_recibido[f,c]-1)
-                print(f'\nSe puede corregir, error en columna: {c+1} y fila: {f+1}')
-                print(f'Mensaje corregido:\n{mensaje_recibido}')
+                print(f'\nMensaje corregido:\n{mensaje_recibido}')
+                print(f'Error corregido en la columna: {c+1} y fila: {f+1}')
             else:
-                print(f'\nNo se puede corregir')
-        else:
-            if (vrc == 0 and lrc == 0):
-                print('\nError en Bits de LRC y VRC')
-            else:
-                if (vrc == 0):
-                    print('\nError en Bits de LRC')
+                if (VRC_indices.shape[0] == 0 and LRC_indices.shape[0] == 0):
+                    print(f'\nNo hay errores')
                 else:
-                    print('\nError en Bits de VRC')
+                    print(f'\nNo se puede corregir, mas de un error')
+        else:
+            print('\nError en Bits de LRC y VRC')
     else:
         print(f'\nError en bit de paridad curzada')
     print(f'\nCantidad de mensajes corregidos: {cant_corregidos}')
@@ -173,16 +169,11 @@ def CompararMensajes(mensaje, mensaje_enviado, N, M):
 
 condicion, dir_archivo, N, M, pc = LeerArgumentos() #pc = paridad_cruzada
 
-condicion = True
-dir_archivo = 'tp4_sample7.txt'
-N = 3
-M = 7
-pc ='-p'
-
 if (condicion):
     prob_fuente, matriz_canal = Leer_Archivo(dir_archivo)
     CalcularValores(prob_fuente, matriz_canal)
     mensaje = CrearMensaje(prob_fuente, N, M, pc)
+
     mensaje_enviado = SimularEnvioMensaje(mensaje, matriz_canal)
 
     print(f'\nMensaje:\n{mensaje}')
